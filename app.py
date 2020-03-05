@@ -179,7 +179,10 @@ def global_view(g_region,g_type,g_date):
     dfg=dfg.reset_index()
     dfg.columns=['City','Country','Lat','Long','cases']
     dfg=dfg[dfg['cases']!=0]
-    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name='City',size='cases',projection="natural earth",width=1600,height=800,opacity=0.8)
+    dfg['size']= dfg['cases']/10
+    dfg['size']=dfg.apply(lambda x: min(x['size'],14),axis=1)
+    dfg['size']=dfg.apply(lambda x: max(x['size'],2),axis=1)
+    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name='cases',hover_data=['cases'],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)
     return fig
 
 if __name__ == '__main__':
