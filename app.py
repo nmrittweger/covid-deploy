@@ -54,7 +54,7 @@ regionDict= {k: g.iloc[:,-1].values.tolist()
           for k, g in dfr.groupby('region')}
 regions = list(regionDict.keys())
 
-'''
+
 #create the marks for the date slider
 daterange=df['date'].drop_duplicates()
 def unixTimeMillis(dt):
@@ -77,7 +77,7 @@ def getMarks(start, end, Nth):
     return result
 
 marks=getMarks(daterange.min(),daterange.max(),2)
-'''
+
 
 
 #LAYOUT**************************************************************************************************
@@ -98,7 +98,6 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
         dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value='confirmed',multi=False, style=dict(width='400px') ),
         dcc.Graph(id='timeline_country_bar'),
         ]),
-    '''
     dcc.Tab(label='Global View', children=[
         dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True ),
         dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='confirmed'),
@@ -112,8 +111,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
             )),
         html.Div(id='slider-output-container'),
         html.Div(dcc.Graph(id='global_view'))
-        ])    
-    '''
+        ])      
 ]))
 
 
@@ -166,7 +164,7 @@ def timeline_country_view(g_country,g_type):
     dfc=dfc.reset_index()
     fig=px.bar(dfc,x='date',y='value',color='Country')
     return fig
-'''
+
 #returns header for the choroplethgraph:selected date
 @app.callback(
     dash.dependencies.Output('slider-output-container', 'children'),
@@ -188,16 +186,14 @@ def global_view(g_region,g_type,g_date):
     dfg=df[df['date']==g_date]
     dfg=dfg[dfg['type']==g_type]
     dfg=dfg[dfg['region'].isin(g_region)]
-    dfg=pd.pivot_table(dfg,index=['C_Clean','alpha-3'], values='value',aggfunc='sum')
+    dfg=pd.pivot_table(dfg,index=['City','C_Clean','Lat','Long'], values='value',aggfunc='sum')
     dfg=dfg.reset_index()
-    dfg.columns=['Country','CCode','cases']
+    dfg.columns=['City','Country','Lat','Long','cases']
     dfg=dfg[dfg['cases']!=0]
-    fig=px.choropleth(dfg,locations='CCode',color='cases',hover_name='Country',
-                      color_continuous_scale=px.colors.sequential.Plasma,
-                      width=1600, height=800)
+    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name='City',size='cases',projection="natural earth",width=1600,height=800,opacity=0.8)
     return fig
 
-'''
+
 # Run the Dash app
 if __name__ == '__main__':
     app.server.run(debug=False, threaded=True)
