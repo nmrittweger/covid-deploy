@@ -2,25 +2,52 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 
-
+import math
 import pandas as pd
 import plotly.express as px
 from dash.dependencies import Output
 import time
 from datetime import datetime
 
+
+
 app = dash.Dash()
 server = app.server
 
 #read in saved data and merge
-df=pd.read_csv('https://raw.githubusercontent.com/nmrittweger/covid-19/master/data.csv')
+#import data from CSSE
+confirmed = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv')
+recovered = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv')
+deaths = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv')
+
+#combine
+confirmed['type']='Confirmed Cases'
+recovered['type']='Recoveries'
+deaths['type']='Deaths'
+df= confirmed.append(recovered)
+df=df.append(deaths)
+df['Province/State']=df['Province/State'].fillna('N.A.')
+
+#reformat for graphing
+df= df.set_index(['Province/State','Country/Region','Lat','Long','type'])
+df=df.stack()
+df=df.reset_index()
+df.columns=['City','Country','Lat','Long','type','date','value']
+df['date']=pd.to_datetime(df['date'],infer_datetime_format=True)
+df=pd.pivot_table(df, index=['City','Country','Long','Lat','date'],columns='type',values='value')
+df['Currently Ill'] = df['Confirmed Cases'] - df['Deaths']-df['Recoveries']
+df=df.stack()
+df=df.reset_index()
+df.columns=['City','Country','Long','Lat','date','type','value']
+
+#read in countries from own csv
 countries = pd.read_csv('https://raw.githubusercontent.com/nmrittweger/covid-19/master/countrycodes.csv')
+
+
 df=pd.merge(df, countries, how='left', on='Country')
+df['region']=df['region'].fillna('T.B.D.')
+
 df['date']=pd.to_datetime(df['date'])
-df['year']=df['date'].dt.year
-df['month']=df['date'].dt.month
-df['day']=df['date'].dt.day
-df['yy/mm/dd']=df['year'].astype(str) + '/' + df['month'].astype(str) + '/' + df['day'].astype(str)
 
 #lists for use in dropdowns
 country_list = countries['C_Clean'].unique()
@@ -50,9 +77,9 @@ def unixTimeMillis(dt):
     ''' Convert datetime to unix timestamp '''
     return int(time.mktime(dt.timetuple()))
 
-def unixToDatetime(unix):
-    ''' Convert unix timestamp to datetime. '''
-    return pd.to_datetime(unix,unit='s')
+#def unixToDatetime(unix):
+#    ''' Convert unix timestamp to datetime. '''
+#    return pd.to_datetime(unix,unit='s')
 
 def getMarks(start, end, Nth):
     ''' Returns the marks for labeling. 
@@ -63,15 +90,20 @@ def getMarks(start, end, Nth):
         if(i%Nth == 1):
             # Append value to dict
             result[unixTimeMillis(date)] = str(date.strftime('%m-%d'))
+    #append max and min date
+    result[unixTimeMillis(start)] = str(start.strftime('%m-%d'))
+    result[unixTimeMillis(end)] = str(end.strftime('%m-%d'))
     return result
 
-marks=getMarks(daterange.min(),daterange.max(),2)
+number_of_marks=math.ceil(len(daterange)/25) #show no more than 25 date marks
+marks=getMarks(daterange.min(),daterange.max(),number_of_marks)
 
 
 
 #LAYOUT**************************************************************************************************
 app.layout = html.Div(dcc.Tabs(id="tabs", children=[
     dcc.Tab(label='Timeline', children=[
+        html.H3('Select region or country for a timeline of confirmed, recovered and terminal cases'),
         dcc.Dropdown(
             id='region-dropdown',
             options=[{'label':region, 'value':region} for region in regions],
@@ -84,12 +116,13 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
             multi=True
             ),
         dcc.Graph(id='timeline_view'),
-        dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value='confirmed',multi=False, style=dict(width='400px') ),
+        dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value=type_list[0],multi=False, style=dict(width='400px') ),
         dcc.Graph(id='timeline_country_bar'),
         ]),
     dcc.Tab(label='Global View', children=[
-        dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') ),
-        dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='confirmed', style=dict(width='450px')),
+        html.H3('Select region and case to see regional impact as of a particular date'),
+        html.Div([dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') ),
+        dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value=type_list[0], style=dict(width='450px'))]),
         html.Div(dcc.Slider(
                 id='g_date',
                 min = unixTimeMillis(daterange.min()),
@@ -97,8 +130,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
                 value = unixTimeMillis(daterange.max()),
                 step=None, #only defined marks can be selected
                 marks=marks
-            )),
-        html.Div(id='slider-output-container'),
+            ), style= {'width': '98%', 'display': 'inline-block','marginBottom': 10, 'marginTop': 25}),
         html.Div(dcc.Graph(id='global_view')),
         html.Div(dcc.Graph(id='case_rank'))
         ])      
@@ -155,14 +187,6 @@ def timeline_country_view(g_country,g_type):
     fig=px.bar(dfc,x='date',y='value',color='Country')
     return fig
 
-#returns header for the choroplethgraph:selected date
-@app.callback(
-    dash.dependencies.Output('slider-output-container', 'children'),
-    [dash.dependencies.Input('g_date', 'value')])
-def update_output(value):
-    g_date=datetime.utcfromtimestamp(value)
-    g_date=g_date.replace(hour=0, minute=0, second=0)
-    return 'As of ' + g_date.strftime('%Y-%m-%d')
 
 #shows choroplethgraph
 @app.callback(
@@ -172,8 +196,8 @@ def update_output(value):
      dash.dependencies.Input('g_type', 'value'),
      dash.dependencies.Input('g_date', 'value')])
 def global_view(g_region,g_type,g_date):
-    g_date=datetime.utcfromtimestamp(g_date)
-    g_date=g_date.replace(hour=0, minute=0, second=0)
+    g_date=datetime.fromtimestamp(g_date)
+    #g_date=g_date.replace(hour=0, minute=0, second=0)
     dfg=df[df['date']==g_date]
     dfg=dfg[dfg['type']==g_type]
     dfg=dfg[dfg['region'].isin(g_region)]
@@ -185,6 +209,10 @@ def global_view(g_region,g_type,g_date):
     dfg['size']=dfg.apply(lambda x: min(x['size'],14),axis=1)
     dfg['size']=dfg.apply(lambda x: max(x['size'],2),axis=1)    
     fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=g_type,hover_data=[g_type],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)
+    
+    title='As of ' + g_date.strftime('%Y-%m-%d')
+    
+    fig.update_layout(title=title)
     dfc=pd.pivot_table(dfg, index=['Region','Country'], values=g_type, aggfunc='sum')
     dfc=dfc.reset_index()
     dfc.columns=['Region','Country',g_type]
