@@ -62,7 +62,7 @@ def getMarks(start, end, Nth):
     for i, date in enumerate(daterange):
         if(i%Nth == 1):
             # Append value to dict
-            result[unixTimeMillis(date)] = str(date.strftime('%Y-%m-%d'))
+            result[unixTimeMillis(date)] = str(date.strftime('%m-%d'))
     return result
 
 marks=getMarks(daterange.min(),daterange.max(),2)
@@ -77,7 +77,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
             options=[{'label':region, 'value':region} for region in regions],
             value = list(regionDict.keys()),
             multi=True,
-            style=dict(width='400px')
+            style=dict(width='450px')
             ),
         dcc.Dropdown(
             id='country-dropdown',
@@ -88,8 +88,8 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
         dcc.Graph(id='timeline_country_bar'),
         ]),
     dcc.Tab(label='Global View', children=[
-        dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True ),
-        dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='confirmed'),
+        dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') ),
+        dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='confirmed', style=dict(width='450px')),
         html.Div(dcc.Slider(
                 id='g_date',
                 min = unixTimeMillis(daterange.min()),
@@ -99,7 +99,8 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
                 marks=marks
             )),
         html.Div(id='slider-output-container'),
-        html.Div(dcc.Graph(id='global_view'))
+        html.Div(dcc.Graph(id='global_view')),
+        html.Div(dcc.Graph(id='case_rank'))
         ])      
 ]))
 
@@ -165,7 +166,8 @@ def update_output(value):
 
 #shows choroplethgraph
 @app.callback(
-    Output(component_id='global_view', component_property='figure'),
+    [Output(component_id='global_view', component_property='figure'),
+     Output(component_id='case_rank', component_property='figure')],
     [dash.dependencies.Input('g_region', 'value'),
      dash.dependencies.Input('g_type', 'value'),
      dash.dependencies.Input('g_date', 'value')])
@@ -175,15 +177,20 @@ def global_view(g_region,g_type,g_date):
     dfg=df[df['date']==g_date]
     dfg=dfg[dfg['type']==g_type]
     dfg=dfg[dfg['region'].isin(g_region)]
-    dfg=pd.pivot_table(dfg,index=['City','C_Clean','Lat','Long'], values='value',aggfunc='sum')
+    dfg=pd.pivot_table(dfg,index=['region','City','C_Clean','Lat','Long'], values='value',aggfunc='sum')
     dfg=dfg.reset_index()
-    dfg.columns=['City','Country','Lat','Long','cases']
-    dfg=dfg[dfg['cases']!=0]
-    dfg['size']= dfg['cases']/10
+    dfg.columns=['Region','City','Country','Lat','Long',g_type]
+    dfg=dfg[dfg[g_type]!=0]
+    dfg['size']= dfg[g_type]/10
     dfg['size']=dfg.apply(lambda x: min(x['size'],14),axis=1)
-    dfg['size']=dfg.apply(lambda x: max(x['size'],2),axis=1)
-    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name='cases',hover_data=['cases'],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)
-    return fig
+    dfg['size']=dfg.apply(lambda x: max(x['size'],2),axis=1)    
+    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=g_type,hover_data=[g_type],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)
+    dfc=pd.pivot_table(dfg, index=['Region','Country'], values=g_type, aggfunc='sum')
+    dfc=dfc.reset_index()
+    dfc.columns=['Region','Country',g_type]
+    dfc=dfc.sort_values(by=[g_type],ascending=False)
+    fig2 = px.bar(dfc, x='Country',y=g_type,color='Region')
+    return fig, fig2
 
 if __name__ == '__main__':
     app.run_server(debug=False)
