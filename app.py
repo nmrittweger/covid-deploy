@@ -1,7 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-
+import numpy as np
 import math
 import pandas as pd
 import plotly.express as px
@@ -48,6 +48,10 @@ df=pd.merge(df, countries, how='left', on='Country')
 df['region']=df['region'].fillna('T.B.D.')
 
 df['date']=pd.to_datetime(df['date'])
+
+#testing and development below ###########################################################
+#nothing to test
+#############################################################################################
 
 #lists for use in dropdowns
 country_list = countries['C_Clean'].unique()
@@ -118,6 +122,10 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
         dcc.Graph(id='timeline_view'),
         dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value=type_list[0],multi=False, style=dict(width='400px') ),
         dcc.Graph(id='timeline_country_bar'),
+        dcc.Dropdown(id='change_type', options = [{'label':'New cases', 'value':'abs change'},
+                                                  {'label':'Percentage change', 'value':'percentage change'},],value='abs change',multi=False, style=dict(width='400px') ),
+        dcc.Dropdown(id='change_periods', options = [{'label':1, 'value':1},{'label':3, 'value':3},{'label':7, 'value':7}],value=3,multi=False, style=dict(width='400px') ),
+        dcc.Graph(id='change_over_time'),
         ]),
     dcc.Tab(label='Global View', children=[
         html.H3('Select region and case to see regional impact as of a particular date'),
@@ -185,6 +193,36 @@ def timeline_country_view(g_country,g_type):
     dfc=pd.pivot_table(dfc,index=['Country','date'],values='value',aggfunc='sum')
     dfc=dfc.reset_index()
     fig=px.bar(dfc,x='date',y='value',color='Country')
+    return fig
+
+#graph change of case numbers over time for selected countries
+@app.callback(
+    Output(component_id='change_over_time', component_property='figure'),
+    [dash.dependencies.Input('country-dropdown', 'value'),
+     dash.dependencies.Input('timeline_type', 'value'),
+     dash.dependencies.Input('change_type', 'value'),
+     dash.dependencies.Input('change_periods', 'value')])
+def change_over_time(g_country,g_type,change_type,change_periods):
+    chng=df[df['Country'].isin(g_country)]
+    chng=chng[chng['type']==g_type]
+    chng = pd.pivot_table(chng, index='date',values='value', aggfunc='sum')
+    #absolute or percentage change 
+    def change(dframe, changetype, no_of_periods):
+        if changetype=='abs change':
+            ch=dframe.diff(periods=no_of_periods, axis=0) / no_of_periods
+        else:
+            ch=dframe.pct_change(periods=no_of_periods) / no_of_periods
+            
+        ch = ch.replace([np.inf, -np.inf], np.nan)
+        ch= ch.reset_index()
+        return ch
+    ch=change(chng, change_type,change_periods)
+    fig = px.line(ch,x='date',y='value')
+    if change_type=='abs change':
+        fig.update_layout(title= 'New Cases (on average per day over a ' + str(change_periods) + ' day period): '+ g_type)
+    else:
+        fig.update_layout(title= 'Growth Rate (average daily % change of cases over a ' + str(change_periods) + ' day period): '+ g_type)
+        fig.update_yaxes(range=[0,1], tickformat='%')
     return fig
 
 
