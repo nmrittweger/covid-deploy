@@ -16,9 +16,9 @@ server = app.server
 
 #read in saved data and merge
 #import data from CSSE
-confirmed = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv')
+confirmed = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv')
 recovered = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv')
-deaths = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv')
+deaths = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv')
 
 #combine
 confirmed['type']='Confirmed Cases'
@@ -120,7 +120,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
             multi=True
             ),
         dcc.Graph(id='timeline_view'),
-        dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value=type_list[0],multi=False, style=dict(width='400px') ),
+        dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value='Confirmed Cases',multi=False, style=dict(width='400px') ),
         dcc.Graph(id='timeline_country_bar'),
         dcc.Dropdown(id='change_type', options = [{'label':'New cases', 'value':'abs change'},
                                                   {'label':'Percentage change', 'value':'percentage change'},],value='abs change',multi=False, style=dict(width='400px') ),
@@ -130,7 +130,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
     dcc.Tab(label='Global View', children=[
         html.H3('Select region and case to see regional impact as of a particular date'),
         html.Div([dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') ),
-        dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value=type_list[0], style=dict(width='450px'))]),
+        dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='Confirmed Cases', style=dict(width='450px'))]),
         html.Div(dcc.Slider(
                 id='g_date',
                 min = unixTimeMillis(daterange.min()),
