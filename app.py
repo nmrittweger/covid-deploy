@@ -121,6 +121,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
             ),
         dcc.Graph(id='timeline_view'),
         dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value='Confirmed Cases',multi=False, style=dict(width='400px') ),
+        html.H5('Recoveries and Currently Ill data is only available to March 24th, 2020'),
         dcc.Graph(id='timeline_country_bar'),
         dcc.Dropdown(id='change_type', options = [{'label':'New cases', 'value':'abs change'},
                                                   {'label':'Percentage change', 'value':'percentage change'},],value='abs change',multi=False, style=dict(width='400px') ),
@@ -131,6 +132,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
         html.H3('Select region and case to see regional impact as of a particular date'),
         html.Div([dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') ),
         dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='Confirmed Cases', style=dict(width='450px'))]),
+        html.H5('Recoveries and Currently Ill data is only available to March 24th, 2020'),
         html.Div(dcc.Slider(
                 id='g_date',
                 min = unixTimeMillis(daterange.min()),
