@@ -20,6 +20,7 @@ confirmed = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-
 recovered = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv')
 deaths = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv')
 
+
 #combine
 confirmed['type']='Confirmed Cases'
 recovered['type']='Recoveries'
@@ -39,6 +40,11 @@ df['Currently Ill'] = df['Confirmed Cases'] - df['Deaths']-df['Recoveries']
 df=df.stack()
 df=df.reset_index()
 df.columns=['City','Country','Long','Lat','date','type','value']
+
+conf_date=df[df['type']=='Confirmed Cases']['date'].max()
+reco_date=df[df['type']=='Recoveries']['date'].max()
+deat_date=df[df['type']=='Deaths']['date'].max()
+curill_date=min(conf_date,reco_date,deat_date)
 
 #read in countries from own csv
 countries = pd.read_csv('https://raw.githubusercontent.com/nmrittweger/covid-19/master/countrycodes.csv')
@@ -107,7 +113,9 @@ marks=getMarks(daterange.min(),daterange.max(),number_of_marks)
 #LAYOUT**************************************************************************************************
 app.layout = html.Div(dcc.Tabs(id="tabs", children=[
     dcc.Tab(label='Timeline', children=[
-        html.H3('Select region or country for a timeline of confirmed, recovered and terminal cases'),
+        html.H3('Latest available information as of:'),
+        html.H5(' Confirmed Cases: ' + conf_date.strftime('%Y-%m-%d') +', Recoveries: ' + reco_date.strftime('%Y-%m-%d') + ', Deaths: ' + deat_date.strftime('%Y-%m-%d') + ', Currently Ill: ' + curill_date.strftime('%Y-%m-%d')),
+        html.H4('Select region or country for a timeline of confirmed, recovered and terminal cases'),
         dcc.Dropdown(
             id='region-dropdown',
             options=[{'label':region, 'value':region} for region in regions],
@@ -121,7 +129,6 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
             ),
         dcc.Graph(id='timeline_view'),
         dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value='Confirmed Cases',multi=False, style=dict(width='400px') ),
-        html.H5('Recoveries and Currently Ill data is only available to March 24th, 2020'),
         dcc.Graph(id='timeline_country_bar'),
         dcc.Dropdown(id='change_type', options = [{'label':'New cases', 'value':'abs change'},
                                                   {'label':'Percentage change', 'value':'percentage change'},],value='abs change',multi=False, style=dict(width='400px') ),
@@ -129,10 +136,9 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
         dcc.Graph(id='change_over_time'),
         ]),
     dcc.Tab(label='Global View', children=[
-        html.H3('Select region and case to see regional impact as of a particular date'),
+        html.H4('Select region and case to see regional impact as of a particular date'),
         html.Div([dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') ),
         dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='Confirmed Cases', style=dict(width='450px'))]),
-        html.H5('Recoveries and Currently Ill data is only available to March 24th, 2020'),
         html.Div(dcc.Slider(
                 id='g_date',
                 min = unixTimeMillis(daterange.min()),
