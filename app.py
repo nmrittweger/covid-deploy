@@ -51,7 +51,7 @@ countries = pd.read_csv('https://raw.githubusercontent.com/nmrittweger/covid-19/
 
 
 df=pd.merge(df, countries, how='left', on='Country')
-df['region']=df['region'].fillna('T.B.D.')
+df['region']=df['region'].fillna('Locations reporting for the first time')
 
 df['date']=pd.to_datetime(df['date'])
 
