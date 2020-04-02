@@ -251,13 +251,12 @@ def global_view(g_region,g_type,g_date):
     dfg=dfg.reset_index()
     dfg.columns=['Region','City','Country','Lat','Long',g_type]
     dfg=dfg[dfg[g_type]!=0]
-    dfg['size']= dfg[g_type]/10
-    dfg['size']=dfg.apply(lambda x: min(x['size'],14),axis=1)
-    dfg['size']=dfg.apply(lambda x: max(x['size'],2),axis=1)    
-    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=g_type,hover_data=[g_type],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)
-    
-    title='As of ' + g_date.strftime('%Y-%m-%d')
-    
+    dmin=dfg[g_type].min()
+    dmax=dfg[g_type].max()
+    drange=abs(dmax-dmin)
+    dfg['size']=3+(((dfg[g_type]-dmin)/drange)*38)
+    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=g_type,hover_data=[g_type],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)    
+    title='As of ' + g_date.strftime('%Y-%m-%d')    
     fig.update_layout(title=title)
     dfc=pd.pivot_table(dfg, index=['Region','Country'], values=g_type, aggfunc='sum')
     dfc=dfc.reset_index()
