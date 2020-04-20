@@ -248,19 +248,21 @@ def timeline_country_view(g_country,g_type):
 def change_over_time(g_country,g_type,change_type,change_periods):
     chng=df[df['Country'].isin(g_country)]
     chng=chng[chng['type']==g_type]
-    chng = pd.pivot_table(chng, index='date',values='value', aggfunc='sum')
+    chng = pd.pivot_table(chng, index=['Country','date'],values='value', aggfunc='sum')
     #absolute or percentage change 
     def change(dframe, changetype, no_of_periods):
+        ch=dframe.copy(deep=True)
         if changetype=='abs change':
-            ch=dframe.diff(periods=no_of_periods, axis=0) / no_of_periods
+            ch['value']=ch.groupby(['Country'])['value'].diff(periods=no_of_periods) / no_of_periods
         else:
-            ch=dframe.pct_change(periods=no_of_periods) / no_of_periods
+            ch['value']=ch.groupby(['Country'])['value'].pct_change(periods=no_of_periods) / no_of_periods
             
-        ch = ch.replace([np.inf, -np.inf], np.nan)
+        ch = ch.replace([0,np.inf, -np.inf], np.nan)
+        ch=ch.fillna(0)
         ch= ch.reset_index()
         return ch
     ch=change(chng, change_type,change_periods)
-    fig = px.line(ch,x='date',y='value')
+    fig = px.line(ch,x='date',y='value', color='Country')
     if change_type=='abs change':
         fig.update_layout(title= 'New Cases (on average per day over a ' + str(change_periods) + ' day period): '+ g_type)
     else:
