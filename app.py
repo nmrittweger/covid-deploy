@@ -298,7 +298,7 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
     
     
     #consolidate by country
-    dfc=pd.pivot_table(dfc, index=['Country','date'], values='value', aggfunc='sum')
+    dfc=pd.pivot_table(dfc, index=['Country','date','region'], values='value', aggfunc='sum')
     dfc['Number of Cases']= dfc['value'].rolling(window=no_of_periods).mean()
     dfc['Daily Change of Number of Cases']= dfc['value'].diff(periods=no_of_periods) / no_of_periods
     dfc['Daily Percentage Change']= dfc['value'].pct_change(periods=no_of_periods) / no_of_periods
@@ -310,11 +310,13 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
     
     def sorter(changetype):
         sortme=False
+        catorder='total descending'
         if changetype=='Days for Cases to Double':
             sortme=True
-        return sortme
+            catorder= 'total ascending'
+        return sortme, catorder
         
-    dfc=dfc.sort_values(by=[changetype],ascending=sorter(changetype)).head(no_of_top_countries)
+    dfc=dfc.sort_values(by=[changetype],ascending=sorter(changetype)[0]).head(no_of_top_countries)
     top_countries=dfc['Country'].unique().tolist()
     
     #limit dfg to only top countries
@@ -342,8 +344,9 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
     title='As of ' + g_date.strftime('%Y-%m-%d')    
     fig.update_layout(title=title)
 
-    fig2 = px.bar(dfc, x='Country',y=changetype, hover_data=['Number of Cases','Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double'])
-    fig2.update_xaxes(tickangle=45)
+    fig2 = px.bar(dfc, x='Country',y=changetype,color='region', hover_data=['Number of Cases','Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double'])
+    fig2.update_xaxes(tickangle=45,categoryorder=sorter(changetype)[1])
+    
     return fig, fig2
 
 if __name__ == '__main__':
