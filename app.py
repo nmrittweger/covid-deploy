@@ -108,7 +108,7 @@ def getMarks(start, end, Nth):
 number_of_marks=math.ceil(len(daterange)/25) #show no more than 25 date marks
 marks=getMarks(daterange.min(),daterange.max(),number_of_marks)
 
-
+changetypes=['Number of Cases', 'Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double']
 
 #LAYOUT**************************************************************************************************
 app.layout = html.Div(dcc.Tabs(id="tabs", children=[
@@ -136,10 +136,36 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
         dcc.Graph(id='change_over_time'),
         ]),
     dcc.Tab(label='Global View', children=[
-        html.H4('Select region and case to see regional impact as of a particular date'),
-        html.Div([dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') ),
-        dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='Confirmed Cases', style=dict(width='450px'))]),
-        html.Div(dcc.Slider(
+        html.H4(''),
+        html.Div(children=[
+            html.Div(children=[html.Label('Regions to INCLUDE'),
+                                dcc.Dropdown(id='g_region', options=[dict(label=i,value=i) for i in region_list ],value=region_list, multi=True, style=dict(width='450px') )],
+                     style=dict(display='inline-block',width='50%', verticalAlign="left",padding=10)),
+             html.Div(children=[html.Label('Countries to EXCLUDE'),
+                                dcc.Dropdown(id='excludedCountries', options=[dict(label=i,value=i) for i in country_list ],value=[], multi=True, style=dict(width='450px') )],
+                      style=dict(display='inline-block',width='45%', verticalAlign="left",padding=10)),
+        html.Div(children=[
+        html.Div(children=[html.Label('Metric'),dcc.Dropdown(id='changetype', options=[dict(label=i,value=i) for i in changetypes ],value=changetypes[1], style=dict(width='450px'))],
+                 style=dict(display='inline-block',width='25%', verticalAlign="left",padding=10)),
+        html.Div(children=[html.Label('Type of Cases'),dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='Confirmed Cases', style=dict(width='450px'))],
+                 style=dict(display='inline-block',width='25%', verticalAlign="left",padding=10)),
+        html.Div(children=[html.Label('Average'),dcc.Dropdown(id='no_of_periods', options=[{'label':'Latest Number','value': 1},
+                                                                        {'label':'3 Day Avg','value':3},
+                                                                        {'label':'Weekly Avg','value':7},
+                                                                        {'label':'14 Day Avg','value':14}],value=1, style=dict(width='150px'))],
+                 style=dict(display='inline-block',width='15%', verticalAlign="left",padding=10)),
+        html.Div(children=[html.Label('Show Top Countries Only'),dcc.Dropdown(id='no_of_top_countries', options=[{'label':'Show All','value': len(country_list)},
+                                                                        {'label':'Top 10','value':10},
+                                                                        {'label':'Top 20','value':20},
+                                                                        {'label':'Top 30','value':30},
+                                                                        {'label':'Top 50','value':50},],value=30, style=dict(width='450px'))],
+                 style=dict(display='inline-block',width='15%', verticalAlign="left",padding=10)),
+        ],style=dict(display='inline-block',width='98%', verticalAlign="left",padding=10))
+        ]),
+        
+    
+    
+    html.Div(dcc.Slider(
                 id='g_date',
                 min = unixTimeMillis(daterange.min()),
                 max = unixTimeMillis(daterange.max()),
@@ -147,7 +173,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
                 step=None, #only defined marks can be selected
                 marks=marks
             ), style= {'width': '98%', 'display': 'inline-block','marginBottom': 10, 'marginTop': 25}),
-        html.Div(dcc.Graph(id='global_view')),
+        html.Div(dcc.Graph(id='global_view')),        
         html.Div(dcc.Graph(id='case_rank'))
         ])      
 ]))
@@ -240,29 +266,84 @@ def change_over_time(g_country,g_type,change_type,change_periods):
      Output(component_id='case_rank', component_property='figure')],
     [dash.dependencies.Input('g_region', 'value'),
      dash.dependencies.Input('g_type', 'value'),
-     dash.dependencies.Input('g_date', 'value')])
-def global_view(g_region,g_type,g_date):
+     dash.dependencies.Input('g_date', 'value'),
+     dash.dependencies.Input('changetype', 'value'),
+     dash.dependencies.Input('no_of_periods', 'value'),
+     dash.dependencies.Input('excludedCountries', 'value'),
+     dash.dependencies.Input('no_of_top_countries', 'value')])
+def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCountries,no_of_top_countries):
     g_date=datetime.fromtimestamp(g_date)
     #g_date=g_date.replace(hour=0, minute=0, second=0)
-    dfg=df[df['date']==g_date]
-    dfg=dfg[dfg['type']==g_type]
+    dfg=df[~df['Country'].isin(excludedCountries)]
     dfg=dfg[dfg['region'].isin(g_region)]
-    dfg=pd.pivot_table(dfg,index=['region','City','C_Clean','Lat','Long'], values='value',aggfunc='sum')
+    dfg=dfg[dfg['type']==g_type]
+    
+    
+    dfc=dfg.copy(deep=True) #create copy to then calculate country consolidated values for the bar chart further down
+    
+    #get data for choropleth seperate from country data to preserve more detailed lat and long values    
+    dfg=pd.pivot_table(dfg,index=['region','City','Country','Lat','Long','date'], values='value',aggfunc='sum')
+    dfg['Number of Cases']= dfg['value'].rolling(window=no_of_periods).mean()
+    dfg['Daily Change of Number of Cases']= dfg['value'].diff(periods=no_of_periods) / no_of_periods
+    dfg['Daily Percentage Change']= dfg['value'].pct_change(periods=no_of_periods) / no_of_periods
+    dfg['Days for Cases to Double']= 1/dfg['value'].pct_change(periods=no_of_periods) / no_of_periods
+    dfg=dfg.replace([0,np.inf, -np.inf], np.nan)
+    dfg=dfg.dropna()
     dfg=dfg.reset_index()
-    dfg.columns=['Region','City','Country','Lat','Long',g_type]
-    dfg=dfg[dfg[g_type]!=0]
-    dmin=dfg[g_type].min()
-    dmax=dfg[g_type].max()
+    dfg=dfg[dfg['date']==g_date]
+
+    
+    
+    
+    
+    
+    #consolidate by country
+    dfc=pd.pivot_table(dfc, index=['Country','date'], values='value', aggfunc='sum')
+    dfc['Number of Cases']= dfc['value'].rolling(window=no_of_periods).mean()
+    dfc['Daily Change of Number of Cases']= dfc['value'].diff(periods=no_of_periods) / no_of_periods
+    dfc['Daily Percentage Change']= dfc['value'].pct_change(periods=no_of_periods) / no_of_periods
+    dfc['Days for Cases to Double']= 1/dfc['value'].pct_change(periods=no_of_periods) / no_of_periods
+    dfc=dfc.replace([0, np.inf, -np.inf], np.nan)
+    dfc=dfc.dropna()
+    dfc=dfc.reset_index()
+    dfc=dfc[dfc['date']==g_date]
+    
+    def sorter(changetype):
+        sortme=False
+        if changetype=='Days for Cases to Double':
+            sortme=True
+        return sortme
+        
+    dfc=dfc.sort_values(by=[changetype],ascending=sorter(changetype)).head(no_of_top_countries)
+    top_countries=dfc['Country'].unique().tolist()
+    
+    #limit dfg to only top countries
+    dfg=dfg[dfg['Country'].isin(top_countries)]
+    dmin=dfg[changetype].min()
+    dmax=dfg[changetype].max()
     drange=abs(dmax-dmin)
-    dfg['size']=3+(((dfg[g_type]-dmin)/drange)*38)
-    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=g_type,hover_data=[g_type],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)    
+    
+    def sizeme(changetype, dmin, dmax, valuetosize):
+        sm = 3+(((valuetosize-dmin)/drange)*38)
+        if changetype=='Days for Cases to Double':
+            sm=3+(((abs(valuetosize-dmax))/drange)*38)
+        return sm
+    dfg['size']=dfg.apply(lambda x: sizeme(changetype,dmin,dmax,x[changetype]),axis=1)
+    dfg['text']= dfg.apply(lambda x: 'Country: ' + x['Country'] + 
+                           '<br>' + changetype + ': ' + "{:.2f}".format(x[changetype]) + 
+                           '<br>' +
+                           '<br>Number of Cases: ' + "{:.0f}".format(x['Number of Cases']) + 
+                           '<br>Daily Change: ' + "{:.0f}".format(x['Daily Change of Number of Cases'])  + 
+                           '<br>Percentage Change: ' + "{:.2%}".format(x['Daily Percentage Change']) + 
+                           '<br>Days for Cases to Double: ' + "{:.2f}".format(x['Days for Cases to Double']), axis=1)
+    
+    #Graph it
+    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=dfg['Country'],hover_data=['Number of Cases','Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double'],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)    
     title='As of ' + g_date.strftime('%Y-%m-%d')    
     fig.update_layout(title=title)
-    dfc=pd.pivot_table(dfg, index=['Region','Country'], values=g_type, aggfunc='sum')
-    dfc=dfc.reset_index()
-    dfc.columns=['Region','Country',g_type]
-    dfc=dfc.sort_values(by=[g_type],ascending=False)
-    fig2 = px.bar(dfc, x='Country',y=g_type,color='Region')
+
+    fig2 = px.bar(dfc, x='Country',y=changetype, hover_data=['Number of Cases','Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double'])
+    fig2.update_xaxes(tickangle=45)
     return fig, fig2
 
 if __name__ == '__main__':
