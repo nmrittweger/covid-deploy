@@ -146,20 +146,29 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
                       style=dict(display='inline-block',width='45%', verticalAlign="left",padding=10)),
         html.Div(children=[
         html.Div(children=[html.Label('Metric'),dcc.Dropdown(id='changetype', options=[dict(label=i,value=i) for i in changetypes ],value=changetypes[1], style=dict(width='450px'))],
-                 style=dict(display='inline-block',width='25%', verticalAlign="left",padding=10)),
+                 style=dict(display='inline-block',width='20%', verticalAlign="left",)),
         html.Div(children=[html.Label('Type of Cases'),dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='Confirmed Cases', style=dict(width='450px'))],
-                 style=dict(display='inline-block',width='25%', verticalAlign="left",padding=10)),
+                 style=dict(display='inline-block',width='20%', verticalAlign="left",)),
         html.Div(children=[html.Label('Average'),dcc.Dropdown(id='no_of_periods', options=[{'label':'Latest Number','value': 1},
                                                                         {'label':'3 Day Avg','value':3},
                                                                         {'label':'Weekly Avg','value':7},
                                                                         {'label':'14 Day Avg','value':14}],value=1, style=dict(width='150px'))],
-                 style=dict(display='inline-block',width='15%', verticalAlign="left",padding=10)),
+                 style=dict(display='inline-block',width='20%', verticalAlign="left",)),
         html.Div(children=[html.Label('Show Top Countries Only'),dcc.Dropdown(id='no_of_top_countries', options=[{'label':'Show All','value': len(country_list)},
                                                                         {'label':'Top 10','value':10},
                                                                         {'label':'Top 20','value':20},
                                                                         {'label':'Top 30','value':30},
-                                                                        {'label':'Top 50','value':50},],value=30, style=dict(width='450px'))],
-                 style=dict(display='inline-block',width='15%', verticalAlign="left",padding=10)),
+                                                                        {'label':'Top 50','value':50},],value=20, style=dict(width='450px'))],
+                 style=dict(display='inline-block',width='20%', verticalAlign="left",)),
+        html.Div(children=[html.Label('Only Countries with at least'),dcc.Dropdown(id='minimum_cases', options=[{'label':'Show All','value': 0},
+                                                                        {'label':'100 Confirmed Cases','value':100},
+                                                                        {'label':'250 Confirmed Cases','value':250},
+                                                                        {'label':'500 Confirmed Cases','value':500},
+                                                                        {'label':'1,000 Confirmed Cases','value':1000},
+                                                                        {'label':'2,500 Confirmed Cases','value':2500},
+                                                                        {'label':'5,000 Confirmed Cases','value':5000},
+                                                                        {'label':'10,000 Confirmed Cases','value':10000},],value=100, style=dict(width='450px'))],
+                 style=dict(display='inline-block',width='18%', verticalAlign="left",)),
         ],style=dict(display='inline-block',width='98%', verticalAlign="left",padding=10))
         ]),
         
@@ -270,8 +279,10 @@ def change_over_time(g_country,g_type,change_type,change_periods):
      dash.dependencies.Input('changetype', 'value'),
      dash.dependencies.Input('no_of_periods', 'value'),
      dash.dependencies.Input('excludedCountries', 'value'),
-     dash.dependencies.Input('no_of_top_countries', 'value')])
-def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCountries,no_of_top_countries):
+     dash.dependencies.Input('no_of_top_countries', 'value'),
+     dash.dependencies.Input('minimum_cases', 'value'),
+     ])
+def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCountries,no_of_top_countries,minimum_cases):
     g_date=datetime.fromtimestamp(g_date)
     #g_date=g_date.replace(hour=0, minute=0, second=0)
     dfg=df[~df['Country'].isin(excludedCountries)]
@@ -316,6 +327,7 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
             catorder= 'total ascending'
         return sortme, catorder
         
+    dfc=dfc[dfc['Number of Cases']>minimum_cases]
     dfc=dfc.sort_values(by=[changetype],ascending=sorter(changetype)[0]).head(no_of_top_countries)
     top_countries=dfc['Country'].unique().tolist()
     
