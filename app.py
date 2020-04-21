@@ -48,12 +48,15 @@ curill_date=min(conf_date,reco_date,deat_date)
 
 #read in countries from own csv
 countries = pd.read_csv('https://raw.githubusercontent.com/nmrittweger/covid-19/master/countrycodes.csv')
-
+#merge pop into countreis
+pop=pd.read_csv('https://raw.githubusercontent.com/nmrittweger/covid-19/master/population_adjusted.csv')
+countries=pd.merge(countries,pop, how='left',left_on='alpha-3',right_on='Country Code')
 
 df=pd.merge(df, countries, how='left', on='Country')
 df['region']=df['region'].fillna('Locations reporting for the first time')
 
 df['date']=pd.to_datetime(df['date'])
+
 
 #testing and development below ###########################################################
 #nothing to test
@@ -108,7 +111,10 @@ def getMarks(start, end, Nth):
 number_of_marks=math.ceil(len(daterange)/25) #show no more than 25 date marks
 marks=getMarks(daterange.min(),daterange.max(),number_of_marks)
 
-changetypes=['Number of Cases', 'Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double']
+changetypes=['Number of Cases','Cases per 1 mio inhabitants', 'Growth: Daily New Cases','Growth : New Cases per 1 mio inhabitants',
+             'Growth: Daily Percentage Change','Growth: Days for Cases to Double']
+
+
 
 #LAYOUT**************************************************************************************************
 app.layout = html.Div(dcc.Tabs(id="tabs", children=[
@@ -130,9 +136,11 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
         dcc.Graph(id='timeline_view'),
         dcc.Dropdown(id='timeline_type', options = [{'label':t, 'value':t} for t in type_list],value='Confirmed Cases',multi=False, style=dict(width='400px') ),
         dcc.Graph(id='timeline_country_bar'),
-        dcc.Dropdown(id='change_type', options = [{'label':'New cases', 'value':'abs change'},
-                                                  {'label':'Percentage change', 'value':'percentage change'},],value='abs change',multi=False, style=dict(width='400px') ),
-        dcc.Dropdown(id='change_periods', options = [{'label':1, 'value':1},{'label':3, 'value':3},{'label':7, 'value':7}],value=3,multi=False, style=dict(width='400px') ),
+        dcc.Dropdown(id='change_type', options = [dict(label=i,value=i) for i in changetypes ],value=changetypes[3],multi=False, style=dict(width='400px') ),
+        dcc.Dropdown(id='change_periods', options = [{'label':'Latest Number','value': 1},
+                                                                        {'label':'3 Day Avg','value':3},
+                                                                        {'label':'Weekly Avg','value':7},
+                                                                        {'label':'14 Day Avg','value':14}],value=7,multi=False, style=dict(width='400px') ),
         dcc.Graph(id='change_over_time'),
         ]),
     dcc.Tab(label='Global View', children=[
@@ -145,7 +153,7 @@ app.layout = html.Div(dcc.Tabs(id="tabs", children=[
                                 dcc.Dropdown(id='excludedCountries', options=[dict(label=i,value=i) for i in country_list ],value=[], multi=True, style=dict(width='450px') )],
                       style=dict(display='inline-block',width='45%', verticalAlign="left",padding=10)),
         html.Div(children=[
-        html.Div(children=[html.Label('Metric'),dcc.Dropdown(id='changetype', options=[dict(label=i,value=i) for i in changetypes ],value=changetypes[1], style=dict(width='450px'))],
+        html.Div(children=[html.Label('Metric'),dcc.Dropdown(id='changetype', options=[dict(label=i,value=i) for i in changetypes ],value=changetypes[2], style=dict(width='450px'))],
                  style=dict(display='inline-block',width='20%', verticalAlign="left",)),
         html.Div(children=[html.Label('Type of Cases'),dcc.Dropdown(id='g_type', options=[dict(label=i,value=i) for i in type_list ],value='Confirmed Cases', style=dict(width='450px'))],
                  style=dict(display='inline-block',width='20%', verticalAlign="left",)),
@@ -248,26 +256,25 @@ def timeline_country_view(g_country,g_type):
 def change_over_time(g_country,g_type,change_type,change_periods):
     chng=df[df['Country'].isin(g_country)]
     chng=chng[chng['type']==g_type]
-    chng = pd.pivot_table(chng, index=['Country','date'],values='value', aggfunc='sum')
-    #absolute or percentage change 
-    def change(dframe, changetype, no_of_periods):
-        ch=dframe.copy(deep=True)
-        if changetype=='abs change':
-            ch['value']=ch.groupby(['Country'])['value'].diff(periods=no_of_periods) / no_of_periods
-        else:
-            ch['value']=ch.groupby(['Country'])['value'].pct_change(periods=no_of_periods) / no_of_periods
-            
-        ch = ch.replace([0,np.inf, -np.inf], np.nan)
-        ch=ch.fillna(0)
-        ch= ch.reset_index()
-        return ch
-    ch=change(chng, change_type,change_periods)
-    fig = px.line(ch,x='date',y='value', color='Country')
-    if change_type=='abs change':
-        fig.update_layout(title= 'New Cases (on average per day over a ' + str(change_periods) + ' day period): '+ g_type)
-    else:
-        fig.update_layout(title= 'Growth Rate (average daily % change of cases over a ' + str(change_periods) + ' day period): '+ g_type)
+    dfc=pd.pivot_table(chng, index=['Country','date','region','Population'], values='value', aggfunc='sum')
+    dfc=dfc.reset_index()
+    change=pd.DataFrame()
+    for c in dfc['Country'].unique().tolist():
+        tdfc=dfc[dfc['Country']==c]
+        tdfc['Number of Cases']= tdfc['value'].rolling(window=change_periods).mean()
+        tdfc['Cases per 1 mio inhabitants']=1000000 * tdfc['Number of Cases'] / tdfc['Population']
+        tdfc['Growth: Daily New Cases']= tdfc['value'].diff(periods=change_periods) / change_periods
+        tdfc['Growth : New Cases per 1 mio inhabitants']=1000000 * tdfc['Growth: Daily New Cases']/ tdfc['Population']
+        tdfc['Growth: Daily Percentage Change']= tdfc['value'].pct_change(periods=change_periods) / change_periods
+        tdfc['Growth: Days for Cases to Double']= 1/(tdfc['value'].pct_change(periods=change_periods) / change_periods)
+        tdfc=tdfc.replace([0, np.inf, -np.inf], np.nan)
+        change=change.append(tdfc)
+    
+    fig = px.line(change,x='date',y=change_type, color='Country')
+    if change_type=='Growth: Daily Percentage Change':
         fig.update_yaxes(range=[0,1], tickformat='%')
+    
+    fig.update_layout(title=change_type + ' (' + str(change_periods) + ' day average)')    
     return fig
 
 
@@ -295,36 +302,35 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
     dfc=dfg.copy(deep=True) #create copy to then calculate country consolidated values for the bar chart further down
     
     #get data for choropleth seperate from country data to preserve more detailed lat and long values    
-    dfg=pd.pivot_table(dfg,index=['region','City','Country','Lat','Long','date'], values='value',aggfunc='sum')
-    dfg['Number of Cases']= dfg['value'].rolling(window=no_of_periods).mean()
-    dfg['Daily Change of Number of Cases']= dfg['value'].diff(periods=no_of_periods) / no_of_periods
-    dfg['Daily Percentage Change']= dfg['value'].pct_change(periods=no_of_periods) / no_of_periods
-    dfg['Days for Cases to Double']= 1/dfg['value'].pct_change(periods=no_of_periods) / no_of_periods
-    dfg=dfg.replace([0,np.inf, -np.inf], np.nan)
-    dfg=dfg.dropna()
+    dfg=pd.pivot_table(dfg,index=['region','City','Country','Lat','Long','date','Population'], values='value',aggfunc='sum')
     dfg=dfg.reset_index()
+    dfg['Number of Cases']= dfg['value'].rolling(window=no_of_periods).mean()
+    dfg['Cases per 1 mio inhabitants']=1000000 * dfg['Number of Cases'] / dfg['Population']
+    dfg['Growth: Daily New Cases']= dfg['value'].diff(periods=no_of_periods) / no_of_periods
+    dfg['Growth : New Cases per 1 mio inhabitants']=1000000 * dfg['Growth: Daily New Cases']/ dfg['Population']
+    dfg['Growth: Daily Percentage Change']= dfg['value'].pct_change(periods=no_of_periods) / no_of_periods
+    dfg['Growth: Days for Cases to Double']= 1/(dfg['value'].pct_change(periods=no_of_periods) / no_of_periods)
+    dfg=dfg.replace([0,np.inf, -np.inf], np.nan)
+    dfg=dfg[dfg[changetype].notnull()]
     dfg=dfg[dfg['date']==g_date]
 
-    
-    
-    
-    
-    
     #consolidate by country
-    dfc=pd.pivot_table(dfc, index=['Country','date','region'], values='value', aggfunc='sum')
-    dfc['Number of Cases']= dfc['value'].rolling(window=no_of_periods).mean()
-    dfc['Daily Change of Number of Cases']= dfc['value'].diff(periods=no_of_periods) / no_of_periods
-    dfc['Daily Percentage Change']= dfc['value'].pct_change(periods=no_of_periods) / no_of_periods
-    dfc['Days for Cases to Double']= 1/dfc['value'].pct_change(periods=no_of_periods) / no_of_periods
-    dfc=dfc.replace([0, np.inf, -np.inf], np.nan)
-    dfc=dfc.dropna()
+    dfc=pd.pivot_table(dfc, index=['Country','date','region','Population'], values='value', aggfunc='sum')
     dfc=dfc.reset_index()
+    dfc['Number of Cases']= dfc['value'].rolling(window=no_of_periods).mean()
+    dfc['Cases per 1 mio inhabitants']=1000000 * dfc['Number of Cases'] / dfc['Population']
+    dfc['Growth: Daily New Cases']= dfc['value'].diff(periods=no_of_periods) / no_of_periods
+    dfc['Growth : New Cases per 1 mio inhabitants']=1000000 * dfc['Growth: Daily New Cases']/ dfc['Population']
+    dfc['Growth: Daily Percentage Change']= dfc['value'].pct_change(periods=no_of_periods) / no_of_periods
+    dfc['Growth: Days for Cases to Double']= 1/(dfc['value'].pct_change(periods=no_of_periods) / no_of_periods)
+    dfc=dfc.replace([0, np.inf, -np.inf], np.nan)
+    dfc=dfc[dfc[changetype].notnull()]
     dfc=dfc[dfc['date']==g_date]
     
     def sorter(changetype):
         sortme=False
         catorder='total descending'
-        if changetype=='Days for Cases to Double':
+        if changetype=='Growth: Days for Cases to Double':
             sortme=True
             catorder= 'total ascending'
         return sortme, catorder
@@ -341,27 +347,27 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
     
     def sizeme(changetype, dmin, dmax, valuetosize):
         sm = 3+(((valuetosize-dmin)/drange)*38)
-        if changetype=='Days for Cases to Double':
+        if changetype=='Growth: Days for Cases to Double':
             sm=3+(((abs(valuetosize-dmax))/drange)*38)
         return sm
+    dfg
     dfg['size']=dfg.apply(lambda x: sizeme(changetype,dmin,dmax,x[changetype]),axis=1)
-    dfg['text']= dfg.apply(lambda x: 'Country: ' + x['Country'] + 
-                           '<br>' + changetype + ': ' + "{:.2f}".format(x[changetype]) + 
-                           '<br>' +
-                           '<br>Number of Cases: ' + "{:.0f}".format(x['Number of Cases']) + 
-                           '<br>Daily Change: ' + "{:.0f}".format(x['Daily Change of Number of Cases'])  + 
-                           '<br>Percentage Change: ' + "{:.2%}".format(x['Daily Percentage Change']) + 
-                           '<br>Days for Cases to Double: ' + "{:.2f}".format(x['Days for Cases to Double']), axis=1)
+
+    hovrdata=changetypes.copy()
+    hovrdata.append('Population')
     
     #Graph it
-    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=dfg['Country'],hover_data=['Number of Cases','Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double'],size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)    
+    fig=px.scatter_geo(dfg,lat='Lat',lon='Long',color='Country',hover_name=dfg['Country'],hover_data=hovrdata,
+                       size='size',projection="natural earth",width=1600,height=800,opacity=0.8,)    
     title='As of ' + g_date.strftime('%Y-%m-%d')    
     fig.update_layout(title=title)
 
-    fig2 = px.bar(dfc, x='Country',y=changetype,color='region', hover_data=['Number of Cases','Daily Change of Number of Cases','Daily Percentage Change','Days for Cases to Double'])
+    fig2 = px.bar(dfc, x='Country',y=changetype,color='region', hover_data=hovrdata)
     fig2.update_xaxes(tickangle=45,categoryorder=sorter(changetype)[1])
     
     return fig, fig2
+
+
 
 if __name__ == '__main__':
     app.run_server(debug=False)
