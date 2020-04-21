@@ -269,12 +269,24 @@ def change_over_time(g_country,g_type,change_type,change_periods):
         tdfc['Growth: Days for Cases to Double']= 1/(tdfc['value'].pct_change(periods=change_periods) / change_periods)
         tdfc=tdfc.replace([0, np.inf, -np.inf], np.nan)
         change=change.append(tdfc)
-    
-    fig = px.line(change,x='date',y=change_type, color='Country')
+
+    def sorter(changetype):
+        sortme=False
+        catorder='total descending'
+        if changetype=='Growth: Days for Cases to Double':
+            sortme=True
+            catorder= 'total ascending'
+        return sortme, catorder
+
+    hovrdata=changetypes.copy()
+    hovrdata.append('Population')
+
+    fig = px.line(change,x='date',y=change_type, color='Country',hover_data=hovrdata)
     if change_type=='Growth: Daily Percentage Change':
         fig.update_yaxes(range=[0,1], tickformat='%')
     
-    fig.update_layout(title=change_type + ' (' + str(change_periods) + ' day average)')    
+    fig.update_yaxes(categoryorder=sorter(change_type)[1])
+    fig.update_layout(title=g_type + ' - ' + change_type + ' (' + str(change_periods) + ' day average)')    
     return fig
 
 
