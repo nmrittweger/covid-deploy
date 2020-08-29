@@ -111,7 +111,7 @@ def getMarks(start, end, Nth):
 number_of_marks=math.ceil(len(daterange)/25) #show no more than 25 date marks
 marks=getMarks(daterange.min(),daterange.max(),number_of_marks)
 
-changetypes=['Number of Cases','Cases per 1 mio inhabitants', 'Growth: Daily New Cases','Growth : New Cases per 1 mio inhabitants',
+changetypes=['Swiss Quarantine Threshold (<60)','Number of Cases','Cases per 1 mio inhabitants', 'Growth: Daily New Cases','Growth : New Cases per 1 mio inhabitants',
              'Growth: Daily Percentage Change','Growth: Days for Cases to Double']
 
 
@@ -262,11 +262,12 @@ def change_over_time(g_country,g_type,change_type,change_periods):
     for c in dfc['Country'].unique().tolist():
         tdfc=dfc[dfc['Country']==c]
         tdfc['Number of Cases']= tdfc['value'].rolling(window=change_periods).mean()
-        tdfc['Cases per 1 mio inhabitants']=1000000 * tdfc['Number of Cases'] / tdfc['Population']
+        tdfc['Cases per 1 mio inhabitants']=1000000 * (tdfc['Number of Cases'] / tdfc['Population'])
         tdfc['Growth: Daily New Cases']= tdfc['value'].diff(periods=change_periods) / change_periods
-        tdfc['Growth : New Cases per 1 mio inhabitants']=1000000 * tdfc['Growth: Daily New Cases']/ tdfc['Population']
+        tdfc['Growth : New Cases per 1 mio inhabitants']=1000000 * (tdfc['Growth: Daily New Cases']/ tdfc['Population'])
         tdfc['Growth: Daily Percentage Change']= tdfc['value'].pct_change(periods=change_periods) / change_periods
         tdfc['Growth: Days for Cases to Double']= 1/(tdfc['value'].pct_change(periods=change_periods) / change_periods)
+        tdfc['Swiss Quarantine Threshold (<60)']= (tdfc['Growth: Daily New Cases'].rolling(window=14).sum()/ tdfc['Population'])*100000
         tdfc=tdfc.replace([0, np.inf, -np.inf], np.nan)
         change=change.append(tdfc)
 
@@ -286,7 +287,11 @@ def change_over_time(g_country,g_type,change_type,change_periods):
         fig.update_yaxes(range=[0,1], tickformat='%')
     
     fig.update_yaxes(categoryorder=sorter(change_type)[1])
-    fig.update_layout(title=g_type + ' - ' + change_type + ' (' + str(change_periods) + ' day average)')    
+    
+    if change_type!='Swiss Quarantine Threshold (<60)':
+        fig.update_layout(title=g_type + ' - ' + change_type + ' (' + str(change_periods) + ' day average)')    
+    else:
+        fig.update_layout(title=g_type + ' - ' + change_type)    
     return fig
 
 
@@ -317,11 +322,12 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
     dfg=pd.pivot_table(dfg,index=['region','City','Country','Lat','Long','date','Population'], values='value',aggfunc='sum')
     dfg=dfg.reset_index()
     dfg['Number of Cases']= dfg['value'].rolling(window=no_of_periods).mean()
-    dfg['Cases per 1 mio inhabitants']=1000000 * dfg['Number of Cases'] / dfg['Population']
+    dfg['Cases per 1 mio inhabitants']=1000000 * (dfg['Number of Cases'] / dfg['Population'])
     dfg['Growth: Daily New Cases']= dfg['value'].diff(periods=no_of_periods) / no_of_periods
-    dfg['Growth : New Cases per 1 mio inhabitants']=1000000 * dfg['Growth: Daily New Cases']/ dfg['Population']
+    dfg['Growth : New Cases per 1 mio inhabitants']=1000000 * (dfg['Growth: Daily New Cases']/ dfg['Population'])
     dfg['Growth: Daily Percentage Change']= dfg['value'].pct_change(periods=no_of_periods) / no_of_periods
     dfg['Growth: Days for Cases to Double']= 1/(dfg['value'].pct_change(periods=no_of_periods) / no_of_periods)
+    dfg['Swiss Quarantine Threshold (<60)']= (dfg['Growth: Daily New Cases'].rolling(window=14).sum()/ dfg['Population'])*100000
     dfg=dfg.replace([0,np.inf, -np.inf], np.nan)
     dfg=dfg[dfg[changetype].notnull()]
     dfg=dfg[dfg['date']==g_date]
@@ -330,11 +336,12 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
     dfc=pd.pivot_table(dfc, index=['Country','date','region','Population'], values='value', aggfunc='sum')
     dfc=dfc.reset_index()
     dfc['Number of Cases']= dfc['value'].rolling(window=no_of_periods).mean()
-    dfc['Cases per 1 mio inhabitants']=1000000 * dfc['Number of Cases'] / dfc['Population']
+    dfc['Cases per 1 mio inhabitants']=1000000 * (dfc['Number of Cases'] / dfc['Population'])
     dfc['Growth: Daily New Cases']= dfc['value'].diff(periods=no_of_periods) / no_of_periods
-    dfc['Growth : New Cases per 1 mio inhabitants']=1000000 * dfc['Growth: Daily New Cases']/ dfc['Population']
+    dfc['Growth : New Cases per 1 mio inhabitants']=1000000 * (dfc['Growth: Daily New Cases']/ dfc['Population'])
     dfc['Growth: Daily Percentage Change']= dfc['value'].pct_change(periods=no_of_periods) / no_of_periods
     dfc['Growth: Days for Cases to Double']= 1/(dfc['value'].pct_change(periods=no_of_periods) / no_of_periods)
+    dfc['Swiss Quarantine Threshold (<60)']= (dfc['Growth: Daily New Cases'].rolling(window=14).sum()/ dfc['Population'])*100000
     dfc=dfc.replace([0, np.inf, -np.inf], np.nan)
     dfc=dfc[dfc[changetype].notnull()]
     dfc=dfc[dfc['date']==g_date]
