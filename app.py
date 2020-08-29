@@ -291,7 +291,10 @@ def change_over_time(g_country,g_type,change_type,change_periods):
     if change_type!='Swiss Quarantine Threshold (<60)':
         fig.update_layout(title=g_type + ' - ' + change_type + ' (' + str(change_periods) + ' day average)')    
     else:
-        fig.update_layout(title=g_type + ' - ' + change_type)    
+        fig.update_layout(title=g_type + ' - ' + change_type)  
+        fig.add_shape(type="line",x0=0,y0=60,x1=1,y1=60,xref="paper",yref="y",
+            line=dict(color="LightSeaGreen",width=2,dash="dashdot"),)
+
     return fig
 
 
@@ -389,4 +392,4 @@ def global_view(g_region,g_type,g_date, changetype, no_of_periods, excludedCount
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=True)
